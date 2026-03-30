@@ -1,6 +1,9 @@
 package service;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Random;
+import java.util.Scanner;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -107,6 +110,63 @@ public class RecommendationService {
 	        }
 	    }
 	    return false;
+	}
+	
+	public void startInteractiveMode() throws Exception {
+		Scanner scanner = new Scanner(System.in);
+		
+		while(true) {
+			System.out.println("\nHow would you like your book recommendation today?");
+			System.out.println("1. Keyword Search");
+			System.out.println("2. Genre Filter");
+			System.out.println("3. Mood filter");
+			System.out.println("4. Choas Mode (totally random fiction)");
+			System.out.println("5. Exit");
+			
+			String choice = scanner.nextLine();
+			
+			switch (choice) {
+			case "1":
+				keywordMode(scanner);
+				break;
+			case "2":
+				genreMode(scanner);
+				break;
+			case "3":
+				moodMode(scanner);
+				break;
+			case "4":
+				chaosMode();
+				break;
+			case "5":
+				System.out.println("Goodbye!");
+				return;
+			default:
+				System.out.println("Invalid choice.");
+			}
+		}
+	}
+		
+	
+	private void keywordMode(Scanner scanner) {
+		System.out.print("Enter a keyword: ");
+		String keyword = scanner.nextLine();
+		
+		JSONObject search = metadata.fetchJson(
+		        "https://openlibrary.org/search.json?q=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
+			    );
+		
+		JSONArray docs = search.optJSONArray("docs");
+		if(docs == null || docs.isEmpty()) {
+			System.out.println("No books found for that keyword");
+		}
+		
+		JSONObject pick = docs.getJSONObject(new Random().nextInt(docs.length()));
+	    recommendFromSearchDoc(pick);
+	}
+	
+	private void genreMode(Scanner scanner) {
+		System.out.println("Choose a genre:");
 	}
 
 	
