@@ -72,19 +72,57 @@ public class RecommendationService {
 
         
 	}
+	
 	private void printRecommendation(String title, String author, String genre, String tags, String description) {
-        System.out.println("\n========================================");
-        System.out.println("📚  Your Random Book Recommendation");
-        System.out.println("========================================");
-        System.out.println("Title:       " + title);
-        System.out.println("Author:      " + author);
-        System.out.println("Genre:       " + genre);
-        System.out.println("Tags:        " + tags);
-        System.out.println("----------------------------------------");
-        System.out.println("Summary:");
-        System.out.println(description);
-        System.out.println("========================================\n");
-    }
+	    System.out.println("\n========================================");
+	    System.out.println("📚  Your Book Recommendation");
+	    System.out.println("========================================");
+	    System.out.println("Title:       " + title);
+	    System.out.println("Author:      " + author);
+	    System.out.println("Genre:       " + genre);
+	    System.out.println("Tags:        " + tags);
+	    System.out.println("----------------------------------------");
+	    System.out.println("Summary:");
+	    System.out.println(description);
+	    System.out.println("========================================\n");
+	}
+	
+	private String extractGenre(JSONObject workJson) {
+	    if (workJson == null || !workJson.has("subjects")) return "Unknown";
+
+	    JSONArray subjects = workJson.getJSONArray("subjects");
+
+	    for (Object obj : subjects) {
+	        String s = obj.toString().toLowerCase();
+	        if (s.contains("fiction")) return s;
+	        if (s.contains("fantasy")) return s;
+	        if (s.contains("science fiction")) return s;
+	        if (s.contains("romance")) return s;
+	        if (s.contains("mystery")) return s;
+	        if (s.contains("thriller")) return s;
+	        if (s.contains("horror")) return s;
+	    }
+
+	    return "Unknown";
+	}
+
+	private String extractTags(JSONObject workJson) {
+	    if (workJson == null || !workJson.has("subjects")) return "None";
+
+	    JSONArray subjects = workJson.getJSONArray("subjects");
+
+	    int limit = Math.min(3, subjects.length());
+	    StringBuilder sb = new StringBuilder();
+
+	    for (int i = 0; i < limit; i++) {
+	        sb.append(subjects.getString(i));
+	        if (i < limit - 1) sb.append(", ");
+	    }
+
+	    return sb.toString();
+	}
+
+
 	
 	private boolean isFiction(JSONArray subjects) {
 	    if (subjects == null) return false;
@@ -148,7 +186,47 @@ public class RecommendationService {
 	}
 		
 	
-	private void keywordMode(Scanner scanner) {
+	private void chaosMode() throws Exception {
+		recommendRandomBook();
+	}
+	private void moodMode(Scanner scanner) throws Exception {
+		System.out.println("Choose a mood:");
+		System.out.println("1. Cozy");
+		System.out.println("2. Dark");
+		System.out.println("3. Adventurous");
+		System.out.println("4. Romantic");
+		System.out.println("5. Thought-provoking");
+		
+		String mood = scanner.nextLine();
+		
+		String keyword = switch (mood) {
+			case "1" -> "friendship";
+			case "2" -> "dystopia";
+			case "3" -> "adventure";
+			case "4" -> "romance";
+			case "5" -> "philosophy";
+			default -> null;
+		};
+		
+		if (keyword == null) {
+			System.out.println("Invalid mood.");
+			return;
+		}
+		
+		JSONObject search = metadata.fetchJson("https://openlibrary.org/search.json?q=" + keyword);
+		
+		JSONArray docs = search.optJSONArray("docs");
+		if(docs == null || docs.isEmpty()) {
+			System.out.println("No books found");
+			return;
+		}
+		
+		JSONObject pick = docs.getJSONObject(new Random().nextInt(docs.length()));
+	    recommendFromSearchDoc(pick);
+		
+	}
+	
+	private void keywordMode(Scanner scanner) throws Exception {
 		System.out.print("Enter a keyword: ");
 		String keyword = scanner.nextLine();
 		
@@ -165,8 +243,59 @@ public class RecommendationService {
 	    recommendFromSearchDoc(pick);
 	}
 	
-	private void genreMode(Scanner scanner) {
+	private void recommendFromSearchDoc(JSONObject doc) throws Exception {
+		String title = doc.optString("title", "Uknown Title");
+		
+		String author = "Unknown Author";
+		if(doc.has("author_key")) {
+			String authorKey = "/authors/" + doc.getJSONArray("author_key").getString(0);
+			author = metadata.fetchAuthorName(authorKey);
+		}
+		
+		String workKey = null;
+		if (doc.has("key")) {
+			workKey = doc.getString("key");
+		}
+		
+		JSONObject workJson = (workKey != null)
+				? metadata.fetchJson("https://openlibrary.org" + workKey + ".json")
+				: null;
+		
+		String genre = extractGenre(workJson);
+		String tags = extractTags(workJson);
+		
+		String description = metadata.fetchDescription(workJson);
+		printRecommendation(title, author, genre, tags, description);
+	}
+	private void genreMode(Scanner scanner) throws Exception {
 		System.out.println("Choose a genre:");
+		System.out.println("1. Science Fiction");
+		System.out.println("2. Fantasy");
+		System.out.println("3. Romance");
+		System.out.println("4. Mystery");
+		System.out.println("5. Horror");
+		
+		String choice = scanner.nextLine();
+		String genre = switch (choice) {
+		case "1" -> "science_fiction";
+		case "2" -> "fantasy";
+		case "3" -> "romance";
+		case "4" -> "mystery";
+		case "5" -> "horror";
+		default -> null;
+		};
+		
+		if (genre == null) {
+			System.out.println("Invalid genre.");
+			return;
+		}
+		
+		JSONObject subject = metadata.fetchJson("https://openlibrary.org/subjects/" + genre + ".json?limit=50");
+		
+		JSONArray works = subject.optJSONArray("works");
+		if (works == null || works.isEmpty()) {
+			System.out.println("No books found");
+		}
 	}
 
 	
