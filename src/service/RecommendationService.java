@@ -124,32 +124,6 @@ public class RecommendationService {
 
 
 	
-	private boolean isFiction(JSONArray subjects) {
-	    if (subjects == null) return false;
-
-	    String[] fictionKeywords = {
-	            "fiction",
-	            "science fiction",
-	            "fantasy",
-	            "romance",
-	            "mystery",
-	            "thriller",
-	            "horror",
-	            "young adult",
-	            "adventure"
-	    };
-
-	    for (Object obj : subjects) {
-	        String s = obj.toString().toLowerCase();
-	        for (String keyword : fictionKeywords) {
-	            if (s.contains(keyword)) {
-	                return true;
-	            }
-	        }
-	    }
-	    return false;
-	}
-	
 	public void startInteractiveMode() throws Exception {
 		Scanner scanner = new Scanner(System.in);
 		
@@ -187,60 +161,72 @@ public class RecommendationService {
 		
 	
 	private void chaosMode() throws Exception {
-		recommendRandomBook();
+		Scanner scanner = null;
+		do {
+	        recommendRandomBook();
+	    } while (askForAnother(scanner));
 	}
 	private void moodMode(Scanner scanner) throws Exception {
-		System.out.println("Choose a mood:");
-		System.out.println("1. Cozy");
-		System.out.println("2. Dark");
-		System.out.println("3. Adventurous");
-		System.out.println("4. Romantic");
-		System.out.println("5. Thought-provoking");
-		
-		String mood = scanner.nextLine();
-		
-		String keyword = switch (mood) {
-			case "1" -> "friendship";
-			case "2" -> "dystopia";
-			case "3" -> "adventure";
-			case "4" -> "romance";
-			case "5" -> "philosophy";
-			default -> null;
-		};
-		
-		if (keyword == null) {
-			System.out.println("Invalid mood.");
-			return;
-		}
-		
-		JSONObject search = metadata.fetchJson("https://openlibrary.org/search.json?q=" + keyword);
-		
-		JSONArray docs = search.optJSONArray("docs");
-		if(docs == null || docs.isEmpty()) {
-			System.out.println("No books found");
-			return;
-		}
-		
-		JSONObject pick = docs.getJSONObject(new Random().nextInt(docs.length()));
-	    recommendFromSearchDoc(pick);
+		do {
+	        System.out.println("Choose a mood:");
+	        System.out.println("1. Cozy");
+	        System.out.println("2. Dark");
+	        System.out.println("3. Adventurous");
+	        System.out.println("4. Romantic");
+	        System.out.println("5. Thought-provoking");
+
+	        String mood = scanner.nextLine();
+
+	        String keyword = switch (mood) {
+	            case "1" -> "friendship";
+	            case "2" -> "dystopia";
+	            case "3" -> "adventure";
+	            case "4" -> "romance";
+	            case "5" -> "philosophy";
+	            default -> null;
+	        };
+
+	        if (keyword == null) {
+	            System.out.println("Invalid mood.");
+	            return;
+	        }
+
+	        JSONObject search = metadata.fetchJson(
+	                "https://openlibrary.org/search.json?q=" + keyword
+	        );
+
+	        JSONArray docs = search.optJSONArray("docs");
+	        if (docs == null || docs.isEmpty()) {
+	            System.out.println("No books found.");
+	            return;
+	        }
+
+	        JSONObject pick = docs.getJSONObject(new Random().nextInt(docs.length()));
+	        recommendFromSearchDoc(pick);
+
+	    } while (askForAnother(scanner));
 		
 	}
 	
 	private void keywordMode(Scanner scanner) throws Exception {
-		System.out.print("Enter a keyword: ");
-		String keyword = scanner.nextLine();
-		
-		JSONObject search = metadata.fetchJson(
-		        "https://openlibrary.org/search.json?q=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
-			    );
-		
-		JSONArray docs = search.optJSONArray("docs");
-		if(docs == null || docs.isEmpty()) {
-			System.out.println("No books found for that keyword");
-		}
-		
-		JSONObject pick = docs.getJSONObject(new Random().nextInt(docs.length()));
-	    recommendFromSearchDoc(pick);
+		do {
+	        System.out.print("Enter a keyword: ");
+	        String keyword = scanner.nextLine();
+
+	        JSONObject search = metadata.fetchJson(
+	                "https://openlibrary.org/search.json?q=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
+	        );
+
+	        JSONArray docs = search.optJSONArray("docs");
+	        if (docs == null || docs.isEmpty()) {
+	            System.out.println("No books found for that keyword.");
+	            return;
+	        }
+
+	        JSONObject pick = docs.getJSONObject(new Random().nextInt(docs.length()));
+	        recommendFromSearchDoc(pick);
+
+	    } while (askForAnother(scanner));
 	}
 	
 	private void recommendFromSearchDoc(JSONObject doc) throws Exception {
@@ -267,37 +253,102 @@ public class RecommendationService {
 		String description = metadata.fetchDescription(workJson);
 		printRecommendation(title, author, genre, tags, description);
 	}
+	
+	private void recommendfromSubjectWork(JSONObject work) throws Exception {
+		String title = work.optString("title", "Unknown Title");
+
+	    // Author
+	    String author = "Unknown Author";
+	    if (work.has("authors")) {
+	        JSONArray authors = work.getJSONArray("authors");
+	        if (!authors.isEmpty()) {
+	            String authorKey = authors.getJSONObject(0).getString("key");
+	            author = metadata.fetchAuthorName(authorKey);
+	        }
+	    }
+
+	    // Work JSON
+	    String workKey = work.optString("key", null);
+	    JSONObject workJson = (workKey != null)
+	            ? metadata.fetchJson("https://openlibrary.org" + workKey + ".json")
+	            : null;
+
+	    // Genre + tags
+	    String genre = extractGenre(workJson);
+	    String tags = extractTags(workJson);
+
+	    // Description
+	    String description = metadata.fetchDescription(workJson);
+
+	    printRecommendation(title, author, genre, tags, description);
+		
+	}
+	
 	private void genreMode(Scanner scanner) throws Exception {
-		System.out.println("Choose a genre:");
-		System.out.println("1. Science Fiction");
-		System.out.println("2. Fantasy");
-		System.out.println("3. Romance");
-		System.out.println("4. Mystery");
-		System.out.println("5. Horror");
-		
-		String choice = scanner.nextLine();
-		String genre = switch (choice) {
-		case "1" -> "science_fiction";
-		case "2" -> "fantasy";
-		case "3" -> "romance";
-		case "4" -> "mystery";
-		case "5" -> "horror";
-		default -> null;
-		};
-		
-		if (genre == null) {
-			System.out.println("Invalid genre.");
-			return;
-		}
-		
-		JSONObject subject = metadata.fetchJson("https://openlibrary.org/subjects/" + genre + ".json?limit=50");
-		
-		JSONArray works = subject.optJSONArray("works");
-		if (works == null || works.isEmpty()) {
-			System.out.println("No books found");
-		}
+		 do {
+		        System.out.println("Choose a genre:");
+		        System.out.println("1. Science Fiction");
+		        System.out.println("2. Fantasy");
+		        System.out.println("3. Romance");
+		        System.out.println("4. Mystery");
+		        System.out.println("5. Horror");
+
+		        String choice = scanner.nextLine();
+
+		        String genre = switch (choice) {
+		            case "1" -> "science_fiction";
+		            case "2" -> "fantasy";
+		            case "3" -> "romance";
+		            case "4" -> "detective_and_mystery_stories";
+		            case "5" -> "horror_tales";
+		            default -> null;
+		        };
+
+		        if (genre == null) {
+		            System.out.println("Invalid genre.");
+		            return;
+		        }
+
+		        JSONObject subject = metadata.fetchJson(
+		                "https://openlibrary.org/subjects/" + genre + ".json?limit=50"
+		        );
+
+		        JSONArray works = subject.optJSONArray("works");
+		        if (works == null || works.isEmpty()) {
+		            System.out.println("No books found.");
+		            return;
+		        }
+
+		        JSONObject pick = works.getJSONObject(new Random().nextInt(works.length()));
+		        recommendfromSubjectWork(pick);
+
+		    } while (askForAnother(scanner));
 	}
 
+	
+
+	private boolean askForAnother(Scanner scanner) {
+		System.out.println("\nWould you like another recommendation?");
+		System.out.println("1. Yes");
+		System.out.println("2. Return to main menu");
+		System.out.println("3. Exit");
+		
+		String choice = scanner.nextLine();
+		
+		return switch (choice) {
+			case "1" -> true;
+			case "2" -> false;
+			case "3" -> {
+				System.out.println("Goodbye!");
+				System.exit(0);
+				yield false;
+			}
+			default -> {
+				System.out.println("Invalid choice");
+				yield askForAnother(scanner);
+			}
+		};
+	}
 	
 	} // end class
 	
